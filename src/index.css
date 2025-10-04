@@ -1,0 +1,260 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Distributed Systems Ticket Booking - Modern Design System */
+
+@layer base {
+  :root {
+    /* Base Colors - Clean Modern Theme */
+    --background: 240 25% 98%;
+    --foreground: 222 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 25% 15%;
+
+    /* Primary - Cinema Brand Colors */
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 210 100% 60%;
+
+    /* Secondary - Premium Gold Accent */
+    --secondary: 240 10% 96%;
+    --secondary-foreground: 222 25% 15%;
+
+    --muted: 240 10% 95%;
+    --muted-foreground: 220 15% 55%;
+
+    --accent: 210 100% 95%;
+    --accent-foreground: 210 100% 50%;
+
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 15% 90%;
+    --input: 240 15% 94%;
+    --ring: 250 85% 60%;
+
+    --radius: 0.75rem;
+
+    /* Ticket Booking System Colors */
+    --seat-available: 140 75% 55%;
+    --seat-booked: 0 75% 60%;
+    --seat-locked: 45 90% 60%;
+    --seat-syncing: 220 85% 65%;
+    --seat-selected: 280 85% 70%;
+
+    /* Node Status Colors */
+    --node-online: 140 75% 55%;
+    --node-offline: 0 50% 50%;
+    --node-syncing: 220 85% 65%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-dashboard: linear-gradient(180deg, hsl(var(--background)), hsl(240 20% 96%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100% / 0.8), hsl(240 20% 98%));
+
+    /* Shadows */
+    --shadow-card: 0 4px 20px -2px hsl(var(--primary) / 0.1);
+    --shadow-hover: 0 8px 30px -4px hsl(var(--primary) / 0.2);
+    --shadow-seat: 0 2px 8px -1px hsl(220 25% 25% / 0.15);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-gradient-to-br from-background to-[hsl(240_20%_96%)] text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Seat Grid Styles */
+  .seat {
+    @apply relative w-8 h-8 rounded-lg cursor-pointer transition-all duration-300;
+    box-shadow: var(--shadow-seat);
+  }
+
+  .seat-available {
+    @apply bg-[hsl(var(--seat-available))] hover:scale-110 hover:shadow-lg;
+  }
+
+  .seat-booked {
+    @apply bg-[hsl(var(--seat-booked))] cursor-not-allowed opacity-80;
+  }
+
+  .seat-locked {
+    @apply bg-[hsl(var(--seat-locked))] animate-pulse;
+  }
+
+  .seat-syncing {
+    @apply bg-[hsl(var(--seat-syncing))] animate-pulse;
+  }
+
+  .seat-selected {
+    @apply bg-[hsl(var(--seat-selected))] scale-110 shadow-lg;
+  }
+
+  /* Dashboard Cards */
+  .dashboard-card {
+    @apply bg-card border border-border rounded-xl p-6 shadow-[var(--shadow-card)] 
+           hover:shadow-[var(--shadow-hover)] transition-all duration-300;
+  }
+
+  /* Node Status Indicators */
+  .node-online {
+    @apply bg-[hsl(var(--node-online))] text-white;
+  }
+
+  .node-offline {
+    @apply bg-[hsl(var(--node-offline))] text-white;
+  }
+
+  .node-syncing {
+    @apply bg-[hsl(var(--node-syncing))] text-white animate-pulse;
+  }
+
+  /* Animations */
+  .fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .slide-in-right {
+    animation: slideInRight 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+  }
+
+  .bounce-in {
+    animation: bounceIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+  }
+
+  /* Log Panel */
+  .log-entry {
+    @apply p-3 bg-card border-l-4 border-primary rounded-r-lg mb-2 shadow-sm;
+    animation: logSlideIn 0.5s ease-out forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes logSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
