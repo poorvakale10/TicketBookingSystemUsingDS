@@ -48,42 +48,77 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
   };
 
   const generateQRCode = () => {
-    // Simulate QR code generation
-    return `data:image/svg+xml,${encodeURIComponent(`
-      <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-        <rect width="200" height="200" fill="white"/>
-        <g fill="black">
-          <rect x="10" y="10" width="180" height="180" fill="none" stroke="black" stroke-width="2"/>
-          <text x="100" y="100" text-anchor="middle" font-size="12" fill="black">
-            ${bookingData.bookingId}
-          </text>
-          <text x="100" y="120" text-anchor="middle" font-size="8" fill="black">
-            CinemaBook Ticket
-          </text>
-        </g>
-      </svg>
-    `)}`;
+    // Use public QR service to encode only the bookingId; scanning reveals the ID
+    const payload = bookingData.bookingId ?? '';
+    const size = 200;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(payload)}`;
   };
 
-  const handleDownloadTicket = () => {
-    // Simulate ticket download
-    const ticketData = {
-      bookingId: bookingData.bookingId,
-      movie: bookingData.movie.title,
-      showtime: bookingData.showtime,
-      seats: bookingData.selectedSeats,
-      total: bookingData.totalAmount
-    };
-    
-    const dataStr = JSON.stringify(ticketData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
-    const exportFileDefaultName = `ticket-${bookingData.bookingId}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+  const handleDownloadTicket = async () => {
+    // Generate a professionally formatted PDF ticket with QR code
+    try {
+      const { PDFDocument, StandardFonts, rgb } = await import('https://cdn.skypack.dev/pdf-lib');
+
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595.28, 841.89]); // A4
+
+      const { width, height } = page.getSize();
+      const margin = 40;
+      const titleFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const textFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      // Header bar
+      page.drawRectangle({ x: 0, y: height - 80, width, height: 80, color: rgb(0.12, 0.45, 0.95) });
+      page.drawText('CinemaBook - Digital Ticket', {
+        x: margin,
+        y: height - 50,
+        size: 24,
+        font: titleFont,
+        color: rgb(1, 1, 1)
+      });
+
+      // Booking summary box
+      const boxY = height - 160;
+      page.drawRectangle({ x: margin, y: boxY - 100, width: width - margin * 2, height: 100, color: rgb(0.96, 0.98, 1) });
+      page.drawText(`Movie: ${bookingData.movie.title}`, { x: margin + 14, y: boxY + 60, size: 14, font: textFont, color: rgb(0.1, 0.1, 0.1) });
+      page.drawText(`Genre: ${bookingData.movie.genre}`, { x: margin + 14, y: boxY + 40, size: 12, font: textFont, color: rgb(0.2, 0.2, 0.2) });
+      page.drawText(`Showtime: ${bookingData.showtime}`, { x: margin + 14, y: boxY + 20, size: 12, font: textFont, color: rgb(0.2, 0.2, 0.2) });
+      page.drawText(`Seats: ${bookingData.selectedSeats.join(', ')}`, { x: margin + 14, y: boxY, size: 12, font: textFont, color: rgb(0.2, 0.2, 0.2) });
+      page.drawText(`Total Paid: $${bookingData.totalAmount.toFixed(2)}`, { x: margin + 14, y: boxY - 20, size: 12, font: textFont, color: rgb(0.2, 0.2, 0.2) });
+      if (bookingData.bookingId) {
+        page.drawText(`Booking ID: ${bookingData.bookingId}`, { x: margin + 14, y: boxY - 40, size: 12, font: textFont, color: rgb(0.15, 0.15, 0.15) });
+      }
+
+      // QR code
+      const qrUrl = generateQRCode();
+      const qrPngBytes = await fetch(qrUrl).then(r => r.arrayBuffer());
+      const qrImage = await pdfDoc.embedPng(qrPngBytes);
+      const qrDim = 150;
+      page.drawImage(qrImage, { x: width - margin - qrDim, y: boxY - 20, width: qrDim, height: qrDim });
+      page.drawText('Scan for Booking ID', { x: width - margin - qrDim, y: boxY - 40, size: 10, font: textFont, color: rgb(0.3, 0.3, 0.3) });
+
+      // Footer
+      page.drawText('Thank you for booking with CinemaBook. Please arrive 15 minutes early.', {
+        x: margin,
+        y: margin,
+        size: 10,
+        font: textFont,
+        color: rgb(0.4, 0.4, 0.4)
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ticket-${bookingData.bookingId ?? 'booking'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate PDF ticket:', err);
+    }
   };
 
   const handleShare = async () => {

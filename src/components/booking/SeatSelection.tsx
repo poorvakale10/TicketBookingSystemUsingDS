@@ -14,7 +14,12 @@ interface SeatSelectionProps {
 }
 
 interface SeatState {
-  [seatId: string]: 'available' | 'booked' | 'selected';
+  [seatId: string]: 'available' | 'booked' | 'selected' | 'locked';
+}
+
+interface SeatLockRecord {
+  by: string; // session id
+  expiresAt: number; // epoch ms
 }
 
 export const SeatSelection: React.FC<SeatSelectionProps> = ({ 
@@ -26,6 +31,15 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [seatStates, setSeatStates] = useState<SeatState>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionId] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'server';
+    const existing = window.sessionStorage.getItem('seatSessionId');
+    if (existing) return existing;
+    const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    window.sessionStorage.setItem('seatSessionId', id);
+    return id;
+  });
+  const lockDurationMs = 10 * 60 * 1000; // 10 minutes
 
   // Generate theater layout
   const rows = 10;
@@ -36,25 +50,124 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
   useEffect(() => {
     const initializeSeats = () => {
       const seats: SeatState = {};
-      
+      const storageKey = `bookedSeats:${movie.id}:${showtime}`;
+      const lockKey = `lockedSeats:${movie.id}:${showtime}`;
+
+      // Build full seat map
       for (let row = 1; row <= rows; row++) {
         for (let seat = 1; seat <= seatsPerRow; seat++) {
           const seatId = `${String.fromCharCode(64 + row)}${seat}`;
-          // Randomly book some seats (simulate real bookings)
-          seats[seatId] = Math.random() < 0.15 ? 'booked' : 'available';
+          seats[seatId] = 'available';
         }
       }
-      
+
+      // Try to load persisted booked seats for this movie+showtime
+      try {
+        const persisted = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
+        if (persisted) {
+          const bookedList: string[] = JSON.parse(persisted);
+          for (const seatId of bookedList) {
+            if (seats[seatId] !== undefined) {
+              seats[seatId] = 'booked';
+            }
+          }
+        } else {
+          // First-time: generate a stable initial layout, then persist booked seats
+          const initiallyBooked: string[] = [];
+          for (let row = 1; row <= rows; row++) {
+            for (let seat = 1; seat <= seatsPerRow; seat++) {
+              const seatId = `${String.fromCharCode(64 + row)}${seat}`;
+              const isBooked = Math.random() < 0.15;
+              if (isBooked) {
+                seats[seatId] = 'booked';
+                initiallyBooked.push(seatId);
+              }
+            }
+          }
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(storageKey, JSON.stringify(initiallyBooked));
+          }
+        }
+
+        // Apply current valid locks
+        if (typeof window !== 'undefined') {
+          const rawLocks = window.localStorage.getItem(lockKey);
+          if (rawLocks) {
+            const now = Date.now();
+            const lockMap: Record<string, SeatLockRecord> = JSON.parse(rawLocks);
+            let mutated = false;
+            for (const [seatId, lock] of Object.entries(lockMap)) {
+              if (lock.expiresAt <= now) {
+                delete lockMap[seatId];
+                mutated = true;
+              } else if (seats[seatId] === 'available') {
+                seats[seatId] = 'locked';
+              }
+            }
+            if (mutated) {
+              window.localStorage.setItem(lockKey, JSON.stringify(lockMap));
+            }
+          }
+        }
+      } catch (err) {
+        // If anything goes wrong, fall back to all available (non-critical)
+      }
+
       setSeatStates(seats);
       setIsLoading(false);
     };
 
     // Simulate loading time
     setTimeout(initializeSeats, 800);
-  }, []);
+  }, [movie.id, showtime]);
+
+  // Listen for lock updates from other tabs and periodically clear expired locks
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const lockKey = `lockedSeats:${movie.id}:${showtime}`;
+
+    const refreshFromLocks = () => {
+      const now = Date.now();
+      const nextStates: SeatState = { ...seatStates };
+      // Start by resetting any previously locked seats (but keep booked and selected)
+      for (const [seatId, state] of Object.entries(nextStates)) {
+        if (state === 'locked') nextStates[seatId] = 'available';
+      }
+      const rawLocks = window.localStorage.getItem(lockKey);
+      if (rawLocks) {
+        const lockMap: Record<string, SeatLockRecord> = JSON.parse(rawLocks);
+        let mutated = false;
+        for (const [seatId, lock] of Object.entries(lockMap)) {
+          if (lock.expiresAt <= now) {
+            delete lockMap[seatId];
+            mutated = true;
+          } else if (nextStates[seatId] === 'available') {
+            // Do not override booked or selected
+            nextStates[seatId] = 'locked';
+          }
+        }
+        if (mutated) {
+          window.localStorage.setItem(lockKey, JSON.stringify(lockMap));
+        }
+      }
+      setSeatStates(nextStates);
+    };
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === lockKey) {
+        refreshFromLocks();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    const interval = window.setInterval(refreshFromLocks, 5000);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(interval);
+    };
+  }, [movie.id, showtime, seatStates]);
 
   const handleSeatClick = (seatId: string) => {
-    if (seatStates[seatId] === 'booked') {
+    if (seatStates[seatId] === 'booked' || seatStates[seatId] === 'locked') {
       toast({
         title: 'Seat Unavailable',
         description: `Seat ${seatId} is already booked`,
@@ -67,6 +180,18 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
       // Deselect seat
       setSelectedSeats(prev => prev.filter(id => id !== seatId));
       setSeatStates(prev => ({ ...prev, [seatId]: 'available' }));
+      // Release lock
+      try {
+        const lockKey = `lockedSeats:${movie.id}:${showtime}`;
+        const raw = typeof window !== 'undefined' ? window.localStorage.getItem(lockKey) : null;
+        const map: Record<string, SeatLockRecord> = raw ? JSON.parse(raw) : {};
+        if (map[seatId] && map[seatId].by === sessionId) {
+          delete map[seatId];
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(lockKey, JSON.stringify(map));
+          }
+        }
+      } catch {}
     } else {
       // Select seat (max 8 seats)
       if (selectedSeats.length >= 8) {
@@ -80,6 +205,17 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
       
       setSelectedSeats(prev => [...prev, seatId]);
       setSeatStates(prev => ({ ...prev, [seatId]: 'selected' }));
+      // Acquire lock
+      try {
+        const lockKey = `lockedSeats:${movie.id}:${showtime}`;
+        const raw = typeof window !== 'undefined' ? window.localStorage.getItem(lockKey) : null;
+        const map: Record<string, SeatLockRecord> = raw ? JSON.parse(raw) : {};
+        const now = Date.now();
+        map[seatId] = { by: sessionId, expiresAt: now + lockDurationMs };
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(lockKey, JSON.stringify(map));
+        }
+      } catch {}
     }
   };
 
@@ -92,6 +228,8 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
         return `${baseClass} bg-green-500 hover:bg-green-600 text-white hover:scale-110`;
       case 'booked':
         return `${baseClass} bg-red-500 text-white cursor-not-allowed opacity-80`;
+      case 'locked':
+        return `${baseClass} bg-amber-500 text-white cursor-not-allowed opacity-80`;
       case 'selected':
         return `${baseClass} bg-purple-500 text-white scale-110 shadow-lg`;
       default:
@@ -119,6 +257,35 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
     
     onSeatSelection(selectedSeats, grandTotal);
   };
+
+  // Release all locks held by this session for this movie+showtime
+  const releaseAllLocks = () => {
+    try {
+      const lockKey = `lockedSeats:${movie.id}:${showtime}`;
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(lockKey) : null;
+      if (!raw) return;
+      const map: Record<string, SeatLockRecord> = JSON.parse(raw);
+      let changed = false;
+      for (const seatId of Object.keys(map)) {
+        if (map[seatId].by === sessionId) {
+          delete map[seatId];
+          changed = true;
+        }
+      }
+      if (changed && typeof window !== 'undefined') {
+        window.localStorage.setItem(lockKey, JSON.stringify(map));
+      }
+    } catch {}
+  };
+
+  // On unmount (e.g., navigating back), release locks. When proceeding to payment,
+  // the next page will handle converting to booked or releasing on cancel.
+  useEffect(() => {
+    return () => {
+      // If the user still has selections here, release them when leaving the page
+      releaseAllLocks();
+    };
+  }, []);
 
   const generateSeatRow = (rowNumber: number) => {
     const seats = [];

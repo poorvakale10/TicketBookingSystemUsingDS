@@ -75,6 +75,35 @@ const Index = () => {
 
   const handlePaymentSuccess = (bookingId: string) => {
     if (bookingData) {
+      // Convert locks to booked seats on success (clear locks owned by anyone for these seats)
+      try {
+        const lockKey = `lockedSeats:${bookingData.movie.id}:${bookingData.showtime}`;
+        const rawLocks = typeof window !== 'undefined' ? window.localStorage.getItem(lockKey) : null;
+        if (rawLocks) {
+          const map: Record<string, { by: string; expiresAt: number }> = JSON.parse(rawLocks);
+          let changed = false;
+          for (const s of bookingData.selectedSeats) {
+            if (map[s]) { delete map[s]; changed = true; }
+          }
+          if (changed && typeof window !== 'undefined') {
+            window.localStorage.setItem(lockKey, JSON.stringify(map));
+          }
+        }
+      } catch {}
+
+      // Persist booked seats for this movie+showtime so SeatSelection remains consistent
+      try {
+        const storageKey = `bookedSeats:${bookingData.movie.id}:${bookingData.showtime}`;
+        const existing = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
+        const existingList: string[] = existing ? JSON.parse(existing) : [];
+        const merged = Array.from(new Set([...existingList, ...bookingData.selectedSeats]));
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(storageKey, JSON.stringify(merged));
+        }
+      } catch (err) {
+        // Non-blocking: ignore persistence errors
+      }
+
       setBookingData({
         ...bookingData,
         bookingId
